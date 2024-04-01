@@ -3,7 +3,7 @@ requires = ["scikit-build-core[pyproject]>=0.5.1"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "llama_cpp_python"
+name = "llama_cpp_python-cross"
 dynamic = ["version"]
 description = "Python bindings for the llama.cpp library"
 readme = "README.md"
@@ -73,3 +73,23 @@ Changelog = "https://llama-cpp-python.readthedocs.io/en/latest/changelog/"
 
 [tool.pytest.ini_options]
 testpaths = "tests"
+
+[tool.cibuildwheel]
+before-all = "uname -a"
+
+[tool.cibuildwheel.linux]
+manylinux-aarch64-image = "quay.io/pypa/manylinux_2_28_aarch64:latest"
+manylinux-x86_64-image = "quay.io/pypa/manylinux_2_28_x86_64:latest"
+before-all = [
+  "uname -a",
+  "yum install -y wget openblas-devel",
+  "wget https://dl.fedoraproject.org/pub/epel/8/Everything/$(uname -m)/Packages/c/ccache-3.7.7-1.el8.$(uname -m).rpm",
+  "rpm -Uvh *.rpm",
+  "dnf install -y ccache",
+]
+
+[tool.cibuildwheel.linux.environment]
+LIBRARY_PATH = "/project/llama_cpp"
+LD_LIBRARY_PATH = "/project/llama_cpp"
+RUNPATH = "/project/llama_cpp"
+CMAKE_ARGS = "-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"

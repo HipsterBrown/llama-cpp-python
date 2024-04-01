@@ -1,0 +1,111 @@
+name: Build Wheels
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  build_macos_wheels:
+    name: Build wheels on ${{matrix.os}}-${{matrix.arch}}
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: macos-13, arch: x86_64, build: "*"}
+          - {os: macos-14, arch: arm64, build: "*"}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.17.0
+        if: matrix.arch == 'arm64'
+        env:
+          CIBW_ARCHS: ${{ matrix.arch }}
+          CIBW_BUILD: ${{ matrix.build }}
+          CIBW_BUILD_FRONTEND: build
+          CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS='-DLLAMA_METAL=on' DYLD_LIBRARY_PATH="$(pwd)/llama_cpp"
+        with:
+          config-file: ./pyproject.toml
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.17.0
+        if: matrix.arch == 'x86_64'
+        env:
+          CIBW_ARCHS: ${{ matrix.arch }}
+          CIBW_BUILD: ${{ matrix.build }}
+          CIBW_BUILD_FRONTEND: build
+          CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS='-DLLAMA_METAL=off' DYLD_LIBRARY_PATH="$(pwd)/llama_cpp"
+        with:
+          config-file: ./pyproject.toml
+
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{matrix.os}}-${{matrix.arch}}-${{strategy.job-index}}
+          path: ./wheelhouse/*.whl
+
+
+  build_linux_wheels:
+    name: Build wheels on ${{matrix.os}}-${{matrix.arch}}
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - {os: ubuntu-latest, arch: x86_64, build: "*"}
+          - {os: ubuntu-latest, arch: aarch64, build: "*[61]-manylinux_aarch64"}
+          - {os: ubuntu-latest, arch: aarch64, build: "*[72]-manylinux_aarch64"}
+          - {os: ubuntu-latest, arch: aarch64, build: "*[83]-manylinux_aarch64"}
+          - {os: ubuntu-latest, arch: aarch64, build: "*[94]-manylinux_aarch64"}
+          - {os: ubuntu-latest, arch: aarch64, build: "*[05]-manylinux_aarch64"}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Set up QEMU
+        if: matrix.arch == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.17.0
+        env:
+          CIBW_ARCHS: ${{ matrix.arch }}
+          CIBW_BUILD: ${{ matrix.build }}
+          CIBW_BUILD_FRONTEND: build
+          CIBW_SKIP: '*-musllinux*'
+        with:
+          config-file: ./pyproject.toml
+
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{matrix.os}}-${{matrix.arch}}-${{strategy.job-index}}
+          path: ./wheelhouse/*.whl
+
+
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Build sdist
+        run: pipx run build --sdist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
